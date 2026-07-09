@@ -383,6 +383,21 @@
 			</fieldset>
 
 			<fieldset>
+				<legend>Beam steering</legend>
+				<div class="row">
+					<label for="steerAngle">Direction</label>
+					<input type="range" id="steerAngle" min="0" max="359" step="1" value="0">
+					<output id="steerAngleOut">0°</output>
+				</div>
+				<button id="steerApply">Steer beam</button>
+				<div style="font-size:12px;color:var(--text-dim)">
+					Sets each antenna's phase so the main lobe points at the chosen
+					angle (0° = right, 90° = down). You can also click the pattern
+					chart to steer.
+				</div>
+			</fieldset>
+
+			<fieldset>
 				<legend>Antennas</legend>
 				<div id="antennaList" style="display:flex;flex-direction:column;gap:8px"></div>
 				<button id="addAntenna">+ Add antenna</button>
@@ -840,6 +855,41 @@
 		});
 
 		patCanvas.addEventListener("pointerleave", () => { hoverTheta = null; });
+
+		// ---------- beam steering ----------
+		//
+		// Conjugate phasing: with phases φ_k = k·(r_k · u(θ)) every antenna's
+		// far-field contribution toward θ is in phase, putting the main lobe there.
+
+		function steerTo(thetaRad) {
+			const sw = stage.clientWidth, sh = stage.clientHeight;
+			const k = (2 * Math.PI) / state.wavelength;
+			const ux = Math.cos(thetaRad), uy = Math.sin(thetaRad);
+			const TWO_PI = 2 * Math.PI;
+
+			for (const a of state.antennas) {
+				const phase = k * (a.x * sw * ux + a.y * sh * uy);
+				a.phase = ((phase % TWO_PI) + TWO_PI) % TWO_PI;
+				a.phaseInput.value = a.phase;
+				a.phaseOut.textContent = a.phase.toFixed(2);
+			}
+		}
+
+		$("steerAngle").addEventListener("input", (e) => {
+			$("steerAngleOut").textContent = e.target.value + "°";
+		});
+
+		$("steerApply").addEventListener("click", () => {
+			steerTo((+$("steerAngle").value * Math.PI) / 180);
+		});
+
+		patCanvas.addEventListener("click", () => {
+			if (hoverTheta === null) return;
+			steerTo(hoverTheta);
+			const deg = Math.round((hoverTheta * 180) / Math.PI) % 360;
+			$("steerAngle").value = deg;
+			$("steerAngleOut").textContent = deg + "°";
+		});
 
 		$("patternToggle").addEventListener("change", (e) => {
 			patternOn = e.target.checked;
