@@ -656,23 +656,23 @@
 			const half = (LUT_SIZE - 1) / 2;
 
 			for (let i = 0; i < size; i++) {
-				let sum = 0, wsum = 0;
+				let sum = 0;
 				for (let k = 0; k < n; k++) {
 					const a = state.antennas[k];
 					const dist = a.dist[i];
 					// cylindrical-wave amplitude decay ~ 1/√r, softened near r = 0
 					const w = (fade ? 1 / Math.sqrt(1 + dist * invL) : 1) * a.amp;
 					sum += w * Math.sin(dist * K - state.t + a.phase);
-					wsum += w;
 				}
-				// hue from the normalized interference value, brightness from
-				// the local envelope so the field fades to black with distance
-				const li = ((wsum ? sum / wsum : 0) + 1) * half | 0;
-				const b = fade ? wsum / n : 1;
+				// color IS the field value: attenuation shows as the hue
+				// converging to the green midpoint (0), never as darkening.
+				// amp can exceed 1, so clamp into the LUT range.
+				let li = ((sum / n + 1) * half) | 0;
+				if (li < 0) li = 0; else if (li > LUT_SIZE - 1) li = LUT_SIZE - 1;
 				const j = i * 4;
-				d[j]     = lut[li * 3] * b;
-				d[j + 1] = lut[li * 3 + 1] * b;
-				d[j + 2] = lut[li * 3 + 2] * b;
+				d[j]     = lut[li * 3];
+				d[j + 1] = lut[li * 3 + 1];
+				d[j + 2] = lut[li * 3 + 2];
 				d[j + 3] = 255;
 			}
 
