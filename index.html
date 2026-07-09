@@ -81,6 +81,52 @@
 			pointer-events: none;
 		}
 
+		/* ---------- radiation pattern overlay ---------- */
+
+		#pattern {
+			position: absolute;
+			top: 12px;
+			right: 12px;
+			padding: 10px 12px 12px;
+			border-radius: 10px;
+			background: rgba(11,14,20,.78);
+			border: 1px solid var(--border);
+			backdrop-filter: blur(4px);
+		}
+
+		#pattern .title {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: .08em;
+			color: var(--text-dim);
+			margin-bottom: 6px;
+		}
+
+		#pattern canvas {
+			display: block;
+			width: 220px;
+			height: 220px;
+			cursor: crosshair;
+		}
+
+		#patternTip {
+			position: absolute;
+			display: none;
+			padding: 3px 8px;
+			border-radius: 5px;
+			background: #1a2030;
+			border: 1px solid var(--border);
+			font-size: 11px;
+			font-variant-numeric: tabular-nums;
+			pointer-events: none;
+			white-space: nowrap;
+			z-index: 2;
+		}
+
+		@media (max-width: 640px) {
+			#pattern canvas { width: 150px; height: 150px; }
+		}
+
 		/* ---------- side panel ---------- */
 
 		#panel {
@@ -288,6 +334,11 @@
 	<div id="app">
 		<main id="stage">
 			<canvas></canvas>
+			<div id="pattern">
+				<div class="title">Radiation pattern · |AF|</div>
+				<canvas id="patternCanvas" width="440" height="440"></canvas>
+				<div id="patternTip"></div>
+			</div>
 			<div id="hint">Drag the glowing dots to move antennas</div>
 		</main>
 
@@ -314,6 +365,11 @@
 					<label for="wavelength">Wavelength</label>
 					<input type="range" id="wavelength" min="4" max="60" step="1" value="20">
 					<output id="wavelengthOut">20</output>
+				</div>
+				<div class="row">
+					<label for="patternToggle">Pattern</label>
+					<input type="checkbox" id="patternToggle" checked style="accent-color:var(--accent)">
+					<span style="flex:1;font-size:12px;color:var(--text-dim)">radiation chart</span>
 				</div>
 				<div class="row">
 					<label for="resolution">Resolution</label>
@@ -481,6 +537,7 @@
 				tickScript(dt);
 			}
 			render();
+			renderPattern();
 			requestAnimationFrame(frame);
 		}
 
@@ -662,6 +719,132 @@
 			$("scriptStatus").textContent = "off";
 			$("scriptStatus").className = "";
 			$("scriptError").style.display = "none";
+		});
+
+		// ---------- radiation pattern (far-field array factor) ----------
+		//
+		// AF(θ) = |Σ_k exp(j(φ_k − k·(r_k · u(θ))))| / N with k = 2π/λ,
+		// antenna positions r_k in display px, u in screen coordinates —
+		// so the main lobe points the same on-screen direction as the
+		// constructive fringes in the simulation.
+
+		const patternBox = document.getElementById("pattern");
+		const patCanvas = document.getElementById("patternCanvas");
+		const patCtx = patCanvas.getContext("2d");
+		const patTip = document.getElementById("patternTip");
+
+		const PAT_SAMPLES = 720;
+		const af = new Float32Array(PAT_SAMPLES);
+		let patternOn = true;
+		let hoverTheta = null;
+
+		function computeAF() {
+			const n = state.antennas.length;
+			if (n === 0) { af.fill(0); return; }
+			const sw = stage.clientWidth, sh = stage.clientHeight;
+			const k = (2 * Math.PI) / state.wavelength;
+			for (let s = 0; s < PAT_SAMPLES; s++) {
+				const th = (s / PAT_SAMPLES) * 2 * Math.PI;
+				const ux = Math.cos(th), uy = Math.sin(th);
+				let re = 0, im = 0;
+				for (const a of state.antennas) {
+					const ph = a.phase - k * (a.x * sw * ux + a.y * sh * uy);
+					re += Math.cos(ph);
+					im += Math.sin(ph);
+				}
+				af[s] = Math.sqrt(re * re + im * im) / n;
+			}
+		}
+
+		function renderPattern() {
+			if (!patternOn) return;
+			computeAF();
+
+			const size = 220, cx = size / 2, cy = size / 2, R = size / 2 - 14;
+			patCtx.setTransform(2, 0, 0, 2, 0, 0); // 440px buffer, 220px space
+			patCtx.clearRect(0, 0, size, size);
+
+			// grid: rings + spokes (recessive)
+			patCtx.strokeStyle = "#232b3d";
+			patCtx.lineWidth = 1;
+			for (const f of [0.25, 0.5, 0.75, 1]) {
+				patCtx.beginPath();
+				patCtx.arc(cx, cy, R * f, 0, 2 * Math.PI);
+				patCtx.stroke();
+			}
+			patCtx.beginPath();
+			for (let d = 0; d < 360; d += 30) {
+				const th = (d * Math.PI) / 180;
+				patCtx.moveTo(cx, cy);
+				patCtx.lineTo(cx + R * Math.cos(th), cy + R * Math.sin(th));
+			}
+			patCtx.stroke();
+
+			// axis labels (screen orientation, matches the sim)
+			patCtx.fillStyle = "#8a93a6";
+			patCtx.font = "9px system-ui, sans-serif";
+			patCtx.textAlign = "center";
+			patCtx.textBaseline = "middle";
+			patCtx.fillText("0°", cx + R + 8, cy);
+			patCtx.fillText("90°", cx, cy + R + 8);
+			patCtx.fillText("180°", cx - R - 9, cy);
+			patCtx.fillText("270°", cx, cy - R - 8);
+
+			// |AF| curve
+			patCtx.beginPath();
+			for (let s = 0; s <= PAT_SAMPLES; s++) {
+				const i = s % PAT_SAMPLES;
+				const th = (i / PAT_SAMPLES) * 2 * Math.PI;
+				const r = R * af[i];
+				const x = cx + r * Math.cos(th), y = cy + r * Math.sin(th);
+				s === 0 ? patCtx.moveTo(x, y) : patCtx.lineTo(x, y);
+			}
+			patCtx.closePath();
+			patCtx.fillStyle = "rgba(61,148,245,.16)";
+			patCtx.fill();
+			patCtx.strokeStyle = "#3d94f5";
+			patCtx.lineWidth = 2;
+			patCtx.lineJoin = "round";
+			patCtx.stroke();
+
+			// hover marker
+			if (hoverTheta !== null) {
+				const i = Math.round((hoverTheta / (2 * Math.PI)) * PAT_SAMPLES) % PAT_SAMPLES;
+				const r = R * af[i];
+				const x = cx + r * Math.cos(hoverTheta), y = cy + r * Math.sin(hoverTheta);
+				patCtx.beginPath();
+				patCtx.arc(x, y, 4, 0, 2 * Math.PI);
+				patCtx.fillStyle = "#3d94f5";
+				patCtx.fill();
+				patCtx.lineWidth = 2;
+				patCtx.strokeStyle = "#0b0e14";
+				patCtx.stroke();
+
+				const deg = Math.round((hoverTheta * 180) / Math.PI) % 360;
+				patTip.textContent = `θ ${deg}° · |AF| ${af[i].toFixed(2)}`;
+				patTip.style.display = "block";
+				const rect = patCanvas.getBoundingClientRect();
+				const scale = rect.width / size;
+				patTip.style.left = Math.min(x * scale + 10, rect.width - 90) + "px";
+				patTip.style.top = (y * scale - 24) + "px";
+			} else {
+				patTip.style.display = "none";
+			}
+		}
+
+		patCanvas.addEventListener("pointermove", (e) => {
+			const rect = patCanvas.getBoundingClientRect();
+			const x = ((e.clientX - rect.left) / rect.width) * 220 - 110;
+			const y = ((e.clientY - rect.top) / rect.height) * 220 - 110;
+			hoverTheta = (Math.atan2(y, x) + 2 * Math.PI) % (2 * Math.PI);
+		});
+
+		patCanvas.addEventListener("pointerleave", () => { hoverTheta = null; });
+
+		$("patternToggle").addEventListener("change", (e) => {
+			patternOn = e.target.checked;
+			patternBox.style.display = patternOn ? "block" : "none";
+			hoverTheta = null;
 		});
 
 		// ---------- editor with syntax highlighting ----------
