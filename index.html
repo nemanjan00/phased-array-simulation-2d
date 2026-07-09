@@ -115,6 +115,45 @@
 
 		.marker:active { cursor: grabbing; }
 
+		#legend {
+			position: absolute;
+			right: 12px;
+			bottom: 10px;
+			width: 148px;
+			padding: 6px 10px 7px;
+			border-radius: 8px;
+			background: rgba(11,14,20,.72);
+			border: 1px solid var(--border);
+			backdrop-filter: blur(4px);
+			font-size: 10px;
+			color: var(--text-dim);
+			pointer-events: none;
+			z-index: 1;
+		}
+
+		#legend .lg-label {
+			display: block;
+			text-transform: uppercase;
+			letter-spacing: .08em;
+			margin-bottom: 4px;
+		}
+
+		#legend .lg-bar {
+			height: 8px;
+			border-radius: 4px;
+			/* same hue ramp as the render LUT: hsl 240 -> 0, s 100%, l 50% */
+			background: linear-gradient(90deg,
+				hsl(240 100% 50%), hsl(180 100% 50%) 25%, hsl(120 100% 50%) 50%,
+				hsl(60 100% 50%) 75%, hsl(0 100% 50%));
+		}
+
+		#legend .lg-ticks {
+			display: flex;
+			justify-content: space-between;
+			margin-top: 2px;
+			font-variant-numeric: tabular-nums;
+		}
+
 		#hint {
 			position: absolute;
 			left: 12px;
@@ -423,6 +462,11 @@
 				<div id="patternTip"></div>
 			</div>
 			<div id="hint">Drag the glowing dots to move antennas · scroll to zoom</div>
+			<div id="legend">
+				<span class="lg-label">Field amplitude</span>
+				<div class="lg-bar"></div>
+				<div class="lg-ticks"><span>−1</span><span>0</span><span>+1</span></div>
+			</div>
 		</main>
 
 		<aside id="panel">
