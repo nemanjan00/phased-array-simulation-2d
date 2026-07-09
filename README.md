@@ -1,5 +1,7 @@
 # 2D Phased Array Simulation
 
+**Live demo: <https://phased-array-simulation-2d.onrender.com/>**
+
 An interactive, single-file playground for wave interference and phased-array
 beamforming. Drag antennas around, phase them by hand or by script, steer the
 beam, and watch the far-field radiation pattern react in real time.
@@ -58,6 +60,9 @@ in a browser and you're running.
   ```
 
 ## Usage
+
+Try it at **[phased-array-simulation-2d.onrender.com](https://phased-array-simulation-2d.onrender.com/)**,
+or run it locally:
 
 ```sh
 git clone git@github.com:nemanjan00/phased-array-simulation-2d.git
