@@ -28,6 +28,7 @@
 		#app {
 			display: flex;
 			height: 100%;
+			height: 100dvh; /* track mobile browser chrome */
 		}
 
 		/* ---------- stage ---------- */
@@ -52,7 +53,10 @@
 			z-index: 1;
 		}
 
-		#simBox { overflow: hidden; }
+		#simBox {
+			overflow: hidden;
+			touch-action: none; /* pinch zoom + marker drags handle touches */
+		}
 
 		#simBox.viewSmall {
 			width: 244px;
@@ -232,7 +236,7 @@
 		/* ---------- side panel ---------- */
 
 		#panel {
-			width: 340px;
+			width: clamp(264px, 32vw, 340px);
 			flex-shrink: 0;
 			background: var(--panel);
 			border-left: 1px solid var(--border);
@@ -436,13 +440,25 @@
 
 		@media (max-width: 640px) {
 			#app { flex-direction: column; }
-			#stage { flex: 1 1 55%; }
+			#stage { flex: 1 1 55%; min-height: 240px; }
 			#panel {
 				width: 100%;
 				flex: 1 1 45%;
 				border-left: none;
 				border-top: 1px solid var(--border);
+				padding: 12px;
+				gap: 12px;
 			}
+			#hint { display: none; }
+			#legend {
+				width: 116px;
+				right: 8px;
+				bottom: 8px;
+				padding: 5px 8px 6px;
+			}
+			.viewSmall { top: 8px; right: 8px; }
+			#pattern.viewSmall { padding: 8px 10px 10px; }
+			.editor { height: 140px; }
 		}
 	</style>
 </head>
@@ -818,6 +834,33 @@
 			e.preventDefault();
 			setZoom(state.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
 		}, { passive: false });
+
+		// pinch-to-zoom: track non-marker pointers on the sim; when two are
+		// down, scale zoom by the change in distance between them
+		const pinch = new Map();
+
+		simBox.addEventListener("pointerdown", (e) => {
+			if (e.target.closest(".marker")) return;
+			pinch.set(e.pointerId, [e.clientX, e.clientY]);
+		});
+
+		simBox.addEventListener("pointermove", (e) => {
+			if (!pinch.has(e.pointerId)) return;
+			if (pinch.size === 2) {
+				const [p1, p2] = [...pinch.values()];
+				const before = Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
+				pinch.set(e.pointerId, [e.clientX, e.clientY]);
+				const [q1, q2] = [...pinch.values()];
+				const after = Math.hypot(q1[0] - q2[0], q1[1] - q2[1]);
+				if (before > 0) setZoom(state.zoom * (after / before));
+			} else {
+				pinch.set(e.pointerId, [e.clientX, e.clientY]);
+			}
+		});
+
+		for (const type of ["pointerup", "pointercancel", "pointerleave"]) {
+			simBox.addEventListener(type, (e) => pinch.delete(e.pointerId));
+		}
 
 		$("fadeToggle").addEventListener("change", (e) => {
 			state.fade = e.target.checked;
